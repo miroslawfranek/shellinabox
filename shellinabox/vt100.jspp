@@ -2357,16 +2357,31 @@ VT100.prototype.copy = function(selection) {
   }
   this.internalClipboard     = undefined;
   if (selection.length) {
-    try {
-      // IE
-      this.cliphelper.value  = selection;
-      this.cliphelper.select();
-      this.cliphelper.createTextRange().execCommand('copy');
-    } catch (e) {
-      this.internalClipboard = selection;
+    // Try modern Clipboard API first (requires HTTPS)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(selection).then(function() {
+        // Successfully copied to system clipboard
+      }).catch(function(err) {
+        // Fall back to legacy method
+        this.copyLegacy(selection);
+      }.bind(this));
+    } else {
+      // Fall back to legacy method
+      this.copyLegacy(selection);
     }
-    this.cliphelper.value    = '';
   }
+};
+
+VT100.prototype.copyLegacy = function(selection) {
+  try {
+    // IE
+    this.cliphelper.value  = selection;
+    this.cliphelper.select();
+    this.cliphelper.createTextRange().execCommand('copy');
+  } catch (e) {
+    this.internalClipboard = selection;
+  }
+  this.cliphelper.value    = '';
 };
 
 VT100.prototype.copyLast = function() {
@@ -2377,6 +2392,33 @@ VT100.prototype.copyLast = function() {
 };
 
 VT100.prototype.pasteFnc = function() {
+  var self = this;
+  
+  return function() {
+    // Try modern Clipboard API first (requires HTTPS)
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function(clipboard) {
+        if (clipboard && self.menu.style.visibility == 'hidden') {
+          self.keysPressed('' + clipboard);
+        }
+      }).catch(function(err) {
+        // Fall back to legacy method on error
+        var legacyFn = self.pasteFncLegacy();
+        if (typeof legacyFn === 'function') {
+          legacyFn();
+        }
+      });
+    } else {
+      // Fall back to legacy method
+      var legacyFn = self.pasteFncLegacy();
+      if (typeof legacyFn === 'function') {
+        legacyFn();
+      }
+    }
+  };
+};
+
+VT100.prototype.pasteFncLegacy = function() {
   var clipboard     = undefined;
   if (this.internalClipboard != undefined) {
     clipboard       = this.internalClipboard;
@@ -2512,9 +2554,8 @@ VT100.prototype.showContextMenu = function(x, y) {
            'cellpadding="0" cellspacing="0">' +
       '<tr><td>' +
         '<ul id="menuentries">' +
-          '<li id="beginclipboard">Copy</li>' +
-          '<li id="endclipboard">Paste</li>' +
-          '<li id="browserclipboard">Paste from browser</li>' +
+          '<li id="beginclipboard">Copy <span style="float:right;color:#888">Ctrl+Insert</span></li>' +
+          '<li id="endclipboard">Paste <span style="float:right;color:#888">Shift+Insert</span></li>' +
           '<hr />' +
           '<li id="reset">Reset</li>' +
           '<hr />' +
@@ -2559,7 +2600,7 @@ VT100.prototype.showContextMenu = function(x, y) {
   }
 
   // Actions for default items
-  var actions                 = [ this.copyLast, p, this.pasteBrowserFnc, this.reset,
+  var actions                 = [ this.copyLast, p, this.reset,
                                   this.toggleUTF, this.toggleBell,
                                   this.toggleSoftKeyboard,
                                   this.toggleDisableAlt,
@@ -2736,6 +2777,8 @@ VT100.prototype.handleKey = function(event) {
       switch (key) {
       case  33: /* Page Up      */ this.scrollBack();                   return;
       case  34: /* Page Down    */ this.scrollFore();                   return;
+      case  45: /* Insert       */ var pasteFn = this.pasteFnc();
+                                   if (pasteFn) pasteFn();                return;
       default:                                                          break;
       }
     }
@@ -2920,7 +2963,7 @@ VT100.prototype.fixEvent = function(event) {
     switch (this.lastNormalKeyDownEvent.keyCode) {
     case  39: /* ' -> " */ u = 39; s =  34; break;
     case  44: /* , -> < */ u = 44; s =  60; break;
-    case  45: /* - -> _ */ u = 45; s =  95; break;
+    //case  45: /* - -> _ */ u = 45; s =  95; break;
     case  46: /* . -> > */ u = 46; s =  62; break;
     case  47: /* / -> ? */ u = 47; s =  63; break;
 

@@ -1,3 +1,9 @@
+shellinabox (2.22+oe1) UNRELEASED; urgency=medium
+
+  * changed copy & paste functionality to work with common system clipboard
+
+ -- miroslawfranek <miroslawfranek@open-e.com>  Wed, 23 Jul 2025 17:44:25 +0200
+
 shellinabox (2.21) unstable; urgency=medium
 
   * Patched DoS vulnerability reported by Imre Rad.
